@@ -16,9 +16,5 @@ let package = Package(
                 .product(name: "Yams", package: "Yams"),
             ]
         ),
-        .testTarget(
-            name: "swiftguard-tests",
-            dependencies: ["swiftguard"]
-        ),
     ]
 )
