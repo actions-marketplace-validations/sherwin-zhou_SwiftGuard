@@ -1,0 +1,28 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build universal binary
+        run: |
+          swift build -c release --arch arm64 --arch x86_64
+          strip .build/apple/Products/Release/swiftguard
+          cp .build/apple/Products/Release/swiftguard swiftguard-macos
+          tar czf swiftguard-macos.tar.gz swiftguard-macos
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: swiftguard-macos.tar.gz
+          generate_release_notes: true

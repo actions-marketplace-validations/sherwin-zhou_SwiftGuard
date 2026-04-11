@@ -1,0 +1,95 @@
+name: 'SwiftGuard'
+description: 'AI-powered PR review agent for Swift/SwiftUI projects'
+author: 'issyugk3'
+
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  anthropic_api_key:
+    description: 'Anthropic API key for LLM analysis'
+    required: true
+  openai_api_key:
+    description: 'OpenAI API key for vision analysis (optional)'
+    required: false
+  dry_run:
+    description: 'Skip LLM phases — only run static analysis'
+    required: false
+    default: 'false'
+  config_path:
+    description: 'Path to .swiftguard.yml config file'
+    required: false
+  version:
+    description: 'SwiftGuard version to use (default: latest)'
+    required: false
+    default: 'latest'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Download or build SwiftGuard
+      shell: bash
+      run: |
+        # Try downloading pre-built binary first (fast path)
+        DOWNLOADED=false
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/issyugk3/Hackathon-XCUItestAgent/releases/latest \
+            | grep "browser_download_url.*swiftguard-macos.tar.gz" \
+            | cut -d '"' -f 4 || true)
+        else
+          DOWNLOAD_URL="https://github.com/issyugk3/Hackathon-XCUItestAgent/releases/download/${{ inputs.version }}/swiftguard-macos.tar.gz"
+        fi
+
+        if [ -n "$DOWNLOAD_URL" ]; then
+          HTTP_CODE=$(curl -sL -w "%{http_code}" "$DOWNLOAD_URL" -o /tmp/swiftguard.tar.gz)
+          if [ "$HTTP_CODE" = "200" ]; then
+            tar xzf /tmp/swiftguard.tar.gz -C /tmp
+            chmod +x /tmp/swiftguard-macos
+            DOWNLOADED=true
+            echo "SWIFTGUARD_BIN=/tmp/swiftguard-macos" >> $GITHUB_ENV
+            echo "✅ Downloaded pre-built binary"
+          fi
+        fi
+
+        # Fallback: build from source
+        if [ "$DOWNLOADED" = "false" ]; then
+          echo "⚠️ No release found — building from source..."
+          git clone --depth 1 https://github.com/issyugk3/Hackathon-XCUItestAgent.git /tmp/swiftguard-src
+          cd /tmp/swiftguard-src && swift build -c release
+          echo "SWIFTGUARD_BIN=/tmp/swiftguard-src/.build/release/swiftguard" >> $GITHUB_ENV
+          echo "✅ Built from source"
+        fi
+
+    - name: Run SwiftGuard
+      shell: bash
+      env:
+        LLM_API_KEY: ${{ inputs.anthropic_api_key }}
+        LLM_VISION_API_KEY: ${{ inputs.openai_api_key }}
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        ARGS=(
+          "${{ github.workspace }}"
+          --mode github-action
+          --base-sha "${{ github.event.pull_request.base.sha }}"
+          --pr-number "${{ github.event.pull_request.number }}"
+          --repo "${{ github.repository }}"
+        )
+
+        if [ "${{ inputs.dry_run }}" = "true" ]; then
+          ARGS+=(--dry-run)
+        fi
+
+        if [ -n "${{ inputs.config_path }}" ]; then
+          ARGS+=(--config "${{ inputs.config_path }}")
+        fi
+
+        "$SWIFTGUARD_BIN" "${ARGS[@]}"
+
+    - name: Upload results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: swiftguard-results
+        path: .build/swiftguard/
+        retention-days: 14

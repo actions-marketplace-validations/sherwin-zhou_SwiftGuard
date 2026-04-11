@@ -1,0 +1,51 @@
+name: SwiftGuard PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: read
+  issues: write
+
+jobs:
+  swiftguard:
+    runs-on: macos-15
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cache SwiftGuard build
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: swiftguard-${{ runner.os }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: |
+            swiftguard-${{ runner.os }}-
+
+      - name: Build SwiftGuard
+        run: swift build -c release
+
+      - name: Run SwiftGuard
+        env:
+          LLM_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          .build/release/swiftguard . \
+            --mode github-action \
+            --base-sha ${{ github.event.pull_request.base.sha }} \
+            --pr-number ${{ github.event.pull_request.number }} \
+            --repo ${{ github.repository }}
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swiftguard-results
+          path: .build/swiftguard/
+          retention-days: 14
