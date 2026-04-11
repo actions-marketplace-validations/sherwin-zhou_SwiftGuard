@@ -1,3 +1,37 @@
-DESIGN-v4.md
-Tests/
+# Swift Package Manager
 .build/
+.swiftpm/
+Package.resolved
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+*.xcresult
+
+# macOS
+.DS_Store
+._*
+
+# SwiftGuard runtime output
+.build/swiftguard/
+
+# IDE
+*.swp
+*~
+.vscode/
+.idea/
+
+# Secrets
+.env
+*.key
+
+# Tests (not ready yet)
+Tests/
+
+# Design docs (private)
+DESIGN-v4.md
+
+# Sample app nested git repo
+Examples/SampleApp/.git/
